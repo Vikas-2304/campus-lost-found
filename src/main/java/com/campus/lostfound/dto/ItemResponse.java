@@ -18,6 +18,6 @@ public record ItemResponse(
         ItemStatus status,
         LocalDate eventDate,
         LocalDateTime createdAt,
-        String verificationQuestion, // ONLY populated for the owner
-        boolean isOwner              // computed server-side per requesting user
+        String verificationQuestion,   // ONLY populated for the owner
+        boolean ownedByCurrentUser     // lets the frontend show owner-only panels safely
 ) {}

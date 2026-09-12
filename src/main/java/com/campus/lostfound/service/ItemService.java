@@ -129,7 +129,11 @@ public class ItemService {
     }
 
     private ItemResponse mapToResponse(Item item, User currentUser) {
-        boolean isOwner = currentUser != null && currentUser.getId().equals(item.getPostedBy().getId());
+        boolean isOwner = currentUser != null
+                && currentUser.getId().equals(item.getPostedBy().getId());
+
+        // Security: hide the private question from everyone except the owner
+        String question = isOwner ? item.getVerificationQuestion() : null;
 
         return new ItemResponse(
                 item.getId(),
@@ -144,7 +148,7 @@ public class ItemService {
                 item.getStatus(),
                 item.getEventDate(),
                 item.getCreatedAt(),
-                isOwner ? item.getVerificationQuestion() : null,
+                question,
                 isOwner
         );
     }
