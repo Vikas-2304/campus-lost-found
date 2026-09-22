@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../api/client";
 
@@ -6,21 +6,21 @@ export default function MyReports() {
     const [items, setItems] = useState([]);
     const [error, setError] = useState("");
 
-    useEffect(() => { load(); }, []);
-
-    async function load() {
+    const load = useCallback(async () => {
         try {
             setItems(await api("/api/items/mine"));
         } catch (err) {
             setError(err.message);
         }
-    }
+    }, []);
 
-    async function closeItem(id) {
-        if (!window.confirm("Close this report? It will no longer accept claims.")) return;
+    useEffect(() => { load(); }, [load]);
+
+    async function closeItem(itemId) {
+        if (!window.confirm("Close this report? It will stop appearing in browse and stop accepting claims.")) return;
         try {
-            await api(`/api/items/${id}`, { method: "DELETE" });
-            load();
+            await api(`/api/items/${itemId}`, { method: "DELETE" });
+            await load();
         } catch (err) {
             setError(err.message);
         }
@@ -30,21 +30,24 @@ export default function MyReports() {
         <div>
             <h1>My Reports</h1>
             {error && <p className="error">{error}</p>}
-            {items.length === 0 && <p>You haven't posted anything yet.</p>}
-            <div className="list">
+            {items.length === 0 && (
+                <p>You haven't posted anything yet. <Link to="/post">Post your first item</Link>.</p>
+            )}
+            <div className="report-list">
                 {items.map(item => (
-                    <div key={item.id} className="card row-card">
+                    <div key={item.id} className="card report-row">
                         <div>
                             <span className={`badge ${item.type.toLowerCase()}`}>{item.type}</span>
-                            <Link to={`/items/${item.id}`}><b> {item.title}</b></Link>
+                            <b> {item.title}</b>
+                            <span className={`item-status status-${item.status.toLowerCase()}`}> {item.status}</span>
                             <p className="muted">{item.category} • {item.location} • {item.eventDate}</p>
                         </div>
-                        <div className="row-btns">
-                            <span className={`status-${item.status.toLowerCase()}`}>{item.status}</span>
-                            {item.status !== "CLOSED" && item.status !== "CLAIMED" && (
-                                <button className="danger" onClick={() => closeItem(item.id)}>Close</button>
+                        <div className="report-actions">
+                            <Link to={`/items/${item.id}`}>View / review claims</Link>
+                            <Link to={`/edit/${item.id}`}>Edit</Link>
+                            {(item.status === "OPEN" || item.status === "MATCHED") && (
+                                <button className="reject" onClick={() => closeItem(item.id)}>Close</button>
                             )}
-                            <Link className="primary btn-link" to={`/items/${item.id}`}>Review claims & matches</Link>
                         </div>
                     </div>
                 ))}

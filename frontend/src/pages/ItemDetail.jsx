@@ -1,141 +1,143 @@
-import { useEffect, useState } from "react";
-import { useParams, useNavigate, Link } from "react-router-dom";
+import { useCallback, useEffect, useState } from "react";
+import { Link, useParams } from "react-router-dom";
 import { api } from "../api/client";
 import { useAuth } from "../context/AuthContext";
-import ItemForm from "../components/ItemForm";
-import ClaimsPanel from "../components/ClaimsPanel";
 
 export default function ItemDetail() {
     const { id } = useParams();
     const { loggedIn } = useAuth();
-    const navigate = useNavigate();
+
     const [item, setItem] = useState(null);
+    const [claims, setClaims] = useState([]);
     const [matches, setMatches] = useState([]);
-    const [editing, setEditing] = useState(false);
     const [answer, setAnswer] = useState("");
     const [error, setError] = useState("");
     const [notice, setNotice] = useState("");
 
-    useEffect(() => { load(); }, [id]);
-
-    async function load() {
+    const load = useCallback(async () => {
         try {
             const data = await api(`/api/items/${id}`);
             setItem(data);
-            if (data.isOwner) {
-                setMatches(await api(`/api/items/${id}/matches`));
+            if (data.ownedByCurrentUser) {
+                const [c, m] = await Promise.all([
+                    api(`/api/items/${id}/claims`),
+                    api(`/api/items/${id}/matches`),
+                ]);
+                setClaims(c);
+                setMatches(m);
+            } else {
+                setClaims([]);
+                setMatches([]);
             }
         } catch (err) {
             setError(err.message);
         }
-    }
+    }, [id]);
+
+    useEffect(() => { load(); }, [load]);
 
     async function submitClaim(e) {
         e.preventDefault();
         setError(""); setNotice("");
         try {
-            await api(`/api/items/${id}/claims`, { method: "POST", body: { verificationAnswer: answer } });
-            setNotice("Claim submitted! The owner will review it.");
+            await api(`/api/items/${id}/claims`, {
+                method: "POST",
+                body: { verificationAnswer: answer },
+            });
+            setNotice("Claim submitted. The owner will review your answer.");
             setAnswer("");
         } catch (err) {
             setError(err.message);
         }
     }
 
-    async function updateItem(values) {
-        setError("");
+    async function decide(claimId, action) {
+        setError(""); setNotice("");
         try {
-            const updated = await api(`/api/items/${id}`, { method: "PUT", body: values });
-            setItem(updated);
-            setEditing(false);
-            setNotice("Report updated.");
+            await api(`/api/claims/${claimId}/${action}`, { method: "PUT" });
+            await load();
         } catch (err) {
             setError(err.message);
         }
     }
 
-    async function closeItem() {
-        if (!window.confirm("Close this report? It will no longer accept claims.")) return;
-        try {
-            await api(`/api/items/${id}`, { method: "DELETE" });
-            navigate("/mine");
-        } catch (err) {
-            setError(err.message);
-        }
-    }
-
-    if (error && !item) return <p className="error">{error}</p>;
     if (!item) return <p>Loading…</p>;
 
-    // Claim button rules: logged in, not the owner, item is FOUND and still active
-    const canClaim = loggedIn && !item.isOwner && item.type === "FOUND" &&
-        (item.status === "OPEN" || item.status === "MATCHED");
+    const claimable = item.type === "FOUND" && (item.status === "OPEN" || item.status === "MATCHED");
+    const canClaim = loggedIn && !item.ownedByCurrentUser && claimable;
 
     return (
         <div>
-            {editing ? (
-                <div className="card form-card wide">
-                    <h2>Edit Report</h2>
-                    <ItemForm initial={item} submitLabel="Save changes" onSubmit={updateItem} />
-                    <button className="link-btn" onClick={() => setEditing(false)}>Cancel</button>
+            <Link to="/" className="muted">← Back to browse</Link>
+
+            <div className="card section">
+                <div className="row-between">
+                    <span className={`badge ${item.type.toLowerCase()}`}>{item.type}</span>
+                    <span className="status">Status: {item.status}</span>
                 </div>
-            ) : (
-                <div className="card">
-                    <div className="detail-header">
-                        <span className={`badge ${item.type.toLowerCase()}`}>{item.type}</span>
-                        <span className={`status-${item.status.toLowerCase()}`}>{item.status}</span>
-                    </div>
-                    <h1>{item.title}</h1>
-                    <p>{item.description}</p>
-                    <p className="muted">Category: {item.category} • Location: {item.location}</p>
-                    <p className="muted">Event date: {item.eventDate} • Posted by: {item.postedByName}</p>
-                    {item.imageUrl && <img src={item.imageUrl} alt={item.title} className="detail-img" />}
+                <h1>{item.title}</h1>
+                <p className="muted">
+                    {item.category} • {item.location} • event date {item.eventDate} • posted by {item.postedByName}
+                </p>
+                <p>{item.description}</p>
+                {item.imageUrl && <img src={item.imageUrl} alt={item.title} className="detail-img" />}
+                {item.ownedByCurrentUser && item.verificationQuestion && (
+                    <p className="muted">Your private verification question: <b>{item.verificationQuestion}</b></p>
+                )}
+            </div>
 
-                    {item.status === "MATCHED" && !item.isOwner && (
-                        <p className="match-banner">Possible match found for this report!</p>
-                    )}
+            {error && <p className="error">{error}</p>}
+            {notice && <p className="notice">{notice}</p>}
 
-                    {item.isOwner && (
-                        <>
-                            {item.verificationQuestion && (
-                                <p className="muted">Your private verification question: <b>{item.verificationQuestion}</b></p>
-                            )}
-                            <div className="row-btns">
-                                <button className="primary" onClick={() => setEditing(true)}>Edit</button>
-                                <button className="danger" onClick={closeItem}>Close report</button>
+            {item.ownedByCurrentUser && matches.length > 0 && (
+                <div className="card section match-banner">
+                    <h2>Possible match found</h2>
+                    {matches.map(m => (
+                        <p key={m.matchId}>
+                            <Link to={`/items/${m.otherItemId}`}>{m.otherItemTitle}</Link> (score {m.score})
+                        </p>
+                    ))}
+                </div>
+            )}
+
+            {canClaim && (
+                <div className="card section">
+                    <h2>Is this yours?</h2>
+                    <p className="muted">
+                        The owner set a private verification question. Provide an identifying detail
+                        only the true owner would know — the owner compares your answer against it.
+                    </p>
+                    <form onSubmit={submitClaim} className="claim-form">
+                        <label>Your identifying detail
+                            <input value={answer} onChange={e => setAnswer(e.target.value)} required />
+                        </label>
+                        <button type="submit" className="primary">Claim this item</button>
+                    </form>
+                </div>
+            )}
+
+            {!loggedIn && claimable && (
+                <p className="notice"><Link to="/login">Log in</Link> to claim this item.</p>
+            )}
+
+            {item.ownedByCurrentUser && (
+                <div className="card section">
+                    <h2>Claims ({claims.length})</h2>
+                    {claims.length === 0 && <p className="muted">No claims yet.</p>}
+                    {claims.map(c => (
+                        <div key={c.id} className="claim-row">
+                            <div>
+                                <b>{c.claimantName}</b> answered: “{c.verificationAnswer}”
+                                <span className={`claim-status ${c.status.toLowerCase()}`}> — {c.status}</span>
                             </div>
-                            {matches.length > 0 && (
-                                <div className="section">
-                                    <h3>Possible matches</h3>
-                                    {matches.map(m => (
-                                        <Link key={m.matchId} to={`/items/${m.otherItemId}`} className="card match-card">
-                                            <span className={`badge ${m.otherItemType.toLowerCase()}`}>{m.otherItemType}</span>
-                                            <span>{m.otherItemTitle}</span>
-                                            <span className="score">score {m.score}</span>
-                                        </Link>
-                                    ))}
+                            {c.status === "PENDING" && (
+                                <div className="claim-actions">
+                                    <button className="approve" onClick={() => decide(c.id, "approve")}>Approve</button>
+                                    <button className="reject" onClick={() => decide(c.id, "reject")}>Reject</button>
                                 </div>
                             )}
-                            <ClaimsPanel itemId={id} />
-                        </>
-                    )}
-
-                    {canClaim && (
-                        <div className="section">
-                            <h3>Claim this item</h3>
-                            <form onSubmit={submitClaim} className="claim-form">
-                                <label>Prove it's yours — the owner set a private verification question.
-                                    Describe distinctive details (contents, scratches, serials…). The owner compares
-                                    your answer against their question before approving.
-                                    <textarea value={answer} onChange={e => setAnswer(e.target.value)} required />
-                                </label>
-                                <button className="primary" type="submit">Submit claim</button>
-                            </form>
                         </div>
-                    )}
-
-                    {notice && <p className="notice">{notice}</p>}
-                    {error && <p className="error">{error}</p>}
+                    ))}
                 </div>
             )}
         </div>
