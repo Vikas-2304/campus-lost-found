@@ -1,0 +1,30 @@
+services:
+  db:
+    image: postgres:16
+    container_name: lostfound-db
+    environment:
+      POSTGRES_DB: lostfound
+      POSTGRES_USER: lostfound
+      POSTGRES_PASSWORD: lostfound
+    ports:
+      - "5432:5432"
+    volumes:
+      - lostfound_pgdata:/var/lib/postgresql/
+
+  api:
+    build: .
+    container_name: lostfound-api
+    depends_on:
+      - db
+    environment:
+      DATABASE_URL: jdbc:postgresql://db:5432/lostfound
+      DB_USERNAME: lostfound
+      DB_PASSWORD: lostfound
+      JWT_SECRET: fill-a-32bit-key-here
+      COLLEGE_DOMAIN: "@rvce.edu.in"
+      CORS_ALLOWED_ORIGINS: http://localhost:5173,http://localhost:3000
+    ports:
+      - "8080:8080"
+
+volumes:
+  lostfound_pgdata:
