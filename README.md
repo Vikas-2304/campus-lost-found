@@ -20,7 +20,7 @@ so items get back to the right person without anyone's contact info going public
 - Claim flow with a private verification question + owner approve/reject
 - Approving a claim auto-rejects competing pending claims and locks the item
 - "My Reports": edit, close and review claims on your own posts
-- 🐳 Dockerized backend + Postgres
+- Dockerized backend + Postgres
 
 ## Tech stack
 
