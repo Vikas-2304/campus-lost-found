@@ -47,7 +47,7 @@ public class ItemService {
 
         Item savedItem = itemRepository.save(item);
 
-        // 🔥 TRIGGER THE MATCHING ENGINE
+        // TRIGGER THE MATCHING ENGINE
         matchingService.findMatchesForNewItem(savedItem);
 
         return mapToResponse(savedItem, user);
