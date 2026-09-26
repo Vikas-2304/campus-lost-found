@@ -55,7 +55,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         } catch (Exception e) {
             // CRITICAL FIX: If the token is invalid/expired/malformed, we just ignore it.
             // This allows the request to proceed as an anonymous user, which is required
-            // for public endpoints like Swagger to load correctly!
+            // for public endpoints like Swagger to load correctly
             System.out.println("JWT validation failed, proceeding as anonymous: " + e.getMessage());
         }
 
